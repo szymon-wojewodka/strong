@@ -75,4 +75,81 @@ class strong : public strong_detail::bases<strong<T, Tag, Skills...>,
   T value_;
 };
 
+struct readable {
+  using family = ops::access;
+
+  template <typename Self>
+  struct mixin {
+    constexpr const auto& value() const {
+      return skill_access::get(static_cast<const Self&>(*this));
+    }
+  };
+};
+
+template <auto Eq>
+struct equality_with {
+  using family = ops::equality;
+
+  template <typename Self>
+  struct mixin {
+    friend constexpr bool operator==(const Self& a, const Self& b) {
+      return Eq(skill_access::get(a), skill_access::get(b));
+    }
+  };
+};
+
+using equality = equality_with<std::equal_to<>{}>;
+
+template <auto Op>
+struct addable_with {
+  using family = ops::addition;
+
+  template <typename Self>
+  struct mixin {
+    friend constexpr Self operator+(const Self& a, const Self& b) {
+      return Self(Op(skill_access::get(a), skill_access::get(b)));
+    }
+
+    constexpr Self& operator+=(const Self& b) {
+      Self& self = static_cast<Self&>(*this);
+      self = self + b;
+      return self;
+    }
+  };
+};
+
+using addable = addable_with<std::plus<>{}>;
+
+template <typename Scalar>
+struct scalable {
+  using family = ops::scaling;
+
+  template <typename Self>
+  struct mixin {
+    friend constexpr Self operator*(const Self& a, const Scalar& b) {
+      return Self(skill_access::get(a) * b);
+    }
+
+    friend constexpr Self operator*(const Scalar& b, const Self& a) {
+      return a * b;
+    }
+
+    friend constexpr Self operator/(const Self& a, const Scalar& b) {
+      return Self(skill_access::get(a) / b);
+    }
+
+    constexpr Self& operator*=(const Scalar& b) {
+      Self& self = static_cast<Self&>(*this);
+      self = self * b;
+      return self;
+    }
+
+    constexpr Self& operator/=(const Scalar& b) {
+      Self& self = static_cast<Self&>(*this);
+      self = self / b;
+      return self;
+    }
+  };
+};
+
 #endif  // STRONG_LIB
