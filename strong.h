@@ -37,6 +37,13 @@ struct bases;
 
 template <typename Self, typename... Skills>
 struct bases<Self, list<Skills...>> : public Skills::template mixin<Self>... {};
+
+template <auto Cmp>
+struct equal_by_order {
+  constexpr bool operator()(const auto& a, const auto& b) const {
+    return Cmp(a, b) == 0;
+  }
+};
 }  // namespace strong_detail
 
 template <typename S>
@@ -151,5 +158,21 @@ struct scalable {
     }
   };
 };
+
+template <auto Cmp>
+struct ordered_with {
+  using family = ops::ordering;
+
+  using needs = equality_with<strong_detail::equal_by_order<Cmp>{}>;
+
+  template <typename Self>
+  struct mixin {
+    friend constexpr auto operator<=>(const Self& a, const Self& b) {
+      return Cmp(skill_access::get(a), skill_access::get(b));
+    }
+  };
+};
+
+using ordered = ordered_with<std::compare_three_way{}>;
 
 #endif  // STRONG_LIB
