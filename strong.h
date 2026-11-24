@@ -60,11 +60,76 @@ struct flatten<skills<Skills...>> {
 template <typename Skill>
 using flatten_t = typename flatten<Skill>::type;
 
+template <typename Skill>
+struct needs_of {
+  using type = list<>;
+};
+
+template <typename Skill>
+  requires requires { typename Skill::needs; }
+struct needs_of<Skill> {
+  using type = flatten_t<typename Skill::needs>;
+};
+
+template <typename Skill>
+using needs_of_t = typename needs_of<Skill>::type;
+
+template <typename Skill, typename Family>
+concept in_family = requires { typename Skill::family; } &&
+                    std::same_as<typename Skill::family, Family>;
+
+template <typename A, typename B>
+concept same_family =
+    requires { typename B::family; } && in_family<A, typename B::family>;
+
+template <typename A, typename B>
+concept clashes = std::same_as<A, B> || same_family<A, B>;
+
+template <typename Done, typename Queue>
+struct closure;
+
+template <typename... Done>
+struct closure<list<Done...>, list<>> {
+  using type = list<Done...>;
+};
+
+template <typename... Done, typename Next, typename... Rest>
+struct closure<list<Done...>, list<Next, Rest...>>
+    : std::conditional_t<(clashes<Done, Next> || ...),
+                         closure<list<Done...>, list<Rest...>>,
+                         closure<list<Done..., Next>,
+                                 concat_t<list<Rest...>, needs_of_t<Next>>>> {};
+
+template <typename Explicit>
+struct full_list;
+
+template <typename... Skills>
+struct full_list<list<Skills...>>
+    : closure<list<Skills...>, concat_t<needs_of_t<Skills>...>> {};
+
+template <typename... Skills>
+using full_list_t = typename full_list<flatten_t<skills<Skills...>>>::type;
+
+template <typename Family, typename List>
+struct list_has_family;
+
+template <typename Family, typename... Skills>
+struct list_has_family<Family, list<Skills...>>
+    : std::bool_constant<(in_family<Skills, Family> || ...)> {};
+
 template <typename S>
 struct is_strong : std::false_type {};
 
 template <typename T, typename Tag, typename... Skills>
 struct is_strong<strong<T, Tag, Skills...>> : std::true_type {};
+
+// Czy pełna lista umiejętności silnego typu zawiera rodzinę Family.
+template <typename S, typename Family>
+struct has_family : std::false_type {};
+
+template <typename T, typename Tag, typename... Skills, typename Family>
+struct has_family<strong<T, Tag, Skills...>, Family>
+    : list_has_family<Family, full_list_t<Skills...>> {};
 
 template <typename Self, typename List>
 struct bases;
@@ -84,6 +149,9 @@ template <typename S>
 constexpr bool is_strong_v =
     strong_detail::is_strong<std::remove_cvref_t<S>>::value;
 
+template <typename S, typename Family>
+constexpr bool has_family_v = strong_detail::has_family<S, Family>::value;
+
 class skill_access {
  public:
   template <typename S>
@@ -96,7 +164,7 @@ class skill_access {
 template <typename T, typename Tag, typename... Skills>
 class strong
     : public strong_detail::bases<strong<T, Tag, Skills...>,
-                                  strong_detail::flatten_t<skills<Skills...>>> {
+                                  strong_detail::full_list_t<Skills...>> {
  public:
   using value_type = T;
   using tag_type = Tag;
