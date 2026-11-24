@@ -1,6 +1,7 @@
 #ifndef STRONG_LIB
 #define STRONG_LIB
 
+#include <compare>
 #include <concepts>
 #include <functional>
 #include <type_traits>
@@ -25,6 +26,39 @@ struct hashing {};
 namespace strong_detail {
 template <typename... Ts>
 struct list {};
+
+template <typename... Lists>
+struct concat;
+
+template <>
+struct concat<> {
+  using type = list<>;
+};
+
+template <typename... Ts>
+struct concat<list<Ts...>> {
+  using type = list<Ts...>;
+};
+
+template <typename... As, typename... Bs, typename... Rest>
+struct concat<list<As...>, list<Bs...>, Rest...>
+    : concat<list<As..., Bs...>, Rest...> {};
+
+template <typename... Lists>
+using concat_t = typename concat<Lists...>::type;
+
+template <typename Skill>
+struct flatten {
+  using type = list<Skill>;
+};
+
+template <typename... Skills>
+struct flatten<skills<Skills...>> {
+  using type = concat_t<typename flatten<Skills>::type...>;
+};
+
+template <typename Skill>
+using flatten_t = typename flatten<Skill>::type;
 
 template <typename S>
 struct is_strong : std::false_type {};
@@ -60,8 +94,9 @@ class skill_access {
 };
 
 template <typename T, typename Tag, typename... Skills>
-class strong : public strong_detail::bases<strong<T, Tag, Skills...>,
-                                           strong_detail::list<Skills...>> {
+class strong
+    : public strong_detail::bases<strong<T, Tag, Skills...>,
+                                  strong_detail::flatten_t<skills<Skills...>>> {
  public:
   using value_type = T;
   using tag_type = Tag;
