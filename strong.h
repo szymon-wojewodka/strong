@@ -1,9 +1,12 @@
 #ifndef STRONG_LIB
 #define STRONG_LIB
 
+#include <algorithm>
 #include <compare>
 #include <concepts>
+#include <cstddef>
 #include <functional>
+#include <ostream>
 #include <type_traits>
 #include <utility>
 
@@ -123,7 +126,6 @@ struct is_strong : std::false_type {};
 template <typename T, typename Tag, typename... Skills>
 struct is_strong<strong<T, Tag, Skills...>> : std::true_type {};
 
-// Czy pełna lista umiejętności silnego typu zawiera rodzinę Family.
 template <typename S, typename Family>
 struct has_family : std::false_type {};
 
@@ -136,6 +138,13 @@ struct bases;
 
 template <typename Self, typename... Skills>
 struct bases<Self, list<Skills...>> : public Skills::template mixin<Self>... {};
+
+template <std::size_t N>
+struct fixed_string {
+  char data[N];
+
+  constexpr fixed_string(const char (&str)[N]) { std::copy_n(str, N, data); }
+};
 
 template <auto Cmp>
 struct equal_by_order {
@@ -160,6 +169,17 @@ class skill_access {
     return (std::forward<S>(s).value_);
   }
 };
+
+namespace strong_detail {
+template <typename X>
+constexpr const auto& value_of(const X& x) {
+  if constexpr (is_strong_v<X>) {
+    return skill_access::get(x);
+  } else {
+    return x;
+  }
+}
+}  // namespace strong_detail
 
 template <typename T, typename Tag, typename... Skills>
 class strong
@@ -277,5 +297,37 @@ struct ordered_with {
 };
 
 using ordered = ordered_with<std::compare_three_way{}>;
+
+template <strong_detail::fixed_string Suffix = "">
+struct printable {
+  using family = ops::printing;
+
+  template <typename Self>
+  struct mixin {
+    friend std::ostream& operator<<(std::ostream& os, const Self& a) {
+      return os << skill_access::get(a) << Suffix.data;
+    }
+  };
+};
+
+template <typename Target, auto Conv = std::identity{}>
+struct convertible_to {
+  template <typename Self>
+  struct mixin {
+    constexpr explicit operator Target() const {
+      return Target(Conv(skill_access::get(static_cast<const Self&>(*this))));
+    }
+  };
+};
+
+template <typename Other, typename Result, auto Op = std::divides<>{}>
+struct divisible_by {
+  template <typename Self>
+  struct mixin {
+    friend constexpr Result operator/(const Self& a, const Other& o) {
+      return Result(Op(skill_access::get(a), strong_detail::value_of(o)));
+    }
+  };
+};
 
 #endif  // STRONG_LIB
