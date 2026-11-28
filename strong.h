@@ -146,6 +146,13 @@ struct fixed_string {
   constexpr fixed_string(const char (&str)[N]) { std::copy_n(str, N, data); }
 };
 
+struct std_hash {
+  template <typename T>
+  constexpr std::size_t operator()(const T& value) const {
+    return std::hash<T>{}(value);
+  }
+};
+
 template <auto Cmp>
 struct equal_by_order {
   constexpr bool operator()(const auto& a, const auto& b) const {
@@ -328,6 +335,32 @@ struct divisible_by {
       return Result(Op(skill_access::get(a), strong_detail::value_of(o)));
     }
   };
+};
+
+template <auto H>
+struct hashable_with {
+  using family = ops::hashing;
+  using needs = equality;
+
+  template <typename Self>
+  struct mixin {
+   private:
+    friend struct std::hash<Self>;
+
+    static constexpr std::size_t hash(const Self& s) {
+      return H(skill_access::get(s));
+    }
+  };
+};
+
+using hashable = hashable_with<strong_detail::std_hash{}>;
+
+template <typename T, typename Tag, typename... Skills>
+  requires has_family_v<strong<T, Tag, Skills...>, ops::hashing>
+struct std::hash<strong<T, Tag, Skills...>> {
+  constexpr std::size_t operator()(const strong<T, Tag, Skills...>& s) const {
+    return strong<T, Tag, Skills...>::hash(s);
+  }
 };
 
 #endif  // STRONG_LIB
